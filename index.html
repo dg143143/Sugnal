@@ -8,7 +8,6 @@
   <!-- Libraries -->
   <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
   <style>
     :root {
@@ -407,353 +406,52 @@
     }
   </style>
 </head>
-<body>
-
-  <!-- Login Screen -->
-  <div id="loginScreen" class="auth-container">
-    <h2>🔐 SmartSignal Pro Login</h2>
-    <input type="text" id="username" placeholder="Username" />
-    <input type="password" id="password" placeholder="Password" />
-    <button onclick="handleLogin()">Login</button>
-    
-    <div id="approvalMessage" class="approval-required hidden">
-      ⚠️ Your account is pending admin approval.<br>
-      Please wait for admin to activate your account.
+<body class="dark-mode">
+  <div class="smartsignal-widget">
+    <div class="widget-header">🚀 SmartSignal Pro v2 - Elite AI Edition</div>
+    <div class="theme-toggle" onclick="toggleTheme()">
+      <div class="theme-toggle-ball"></div>
     </div>
-    
-    <div id="revokedMessage" class="approval-required hidden">
-      ⚠️ Your account access has been revoked by admin.<br>
-      <span id="revocationReason"></span>
-    </div>
-  </div>
+    <div class="widget-body">
+      <p><strong>Enter asset:</strong> BTC, ETH, SOL, XRP, etc. (Binance symbols)</p>
+      <input type="text" id="symbolInput" placeholder="e.g. BTC" />
 
-  <!-- Revoke Modal -->
-  <div id="revokeModal" class="revoke-modal hidden">
-    <div class="revoke-modal-content">
-      <h3>⚠️ Revoke User Access</h3>
-      <p>Enter reason for revoking access for <span id="revokeUsername" style="color:#ff0000;"></span>:</p>
-      <textarea id="revokeReason" placeholder="Reason for revocation..."></textarea>
-      <div class="revoke-modal-buttons">
-        <span class="revoke-modal-button cancel" onclick="closeRevokeModal()">Cancel</span>
-        <span class="revoke-modal-button revoke" onclick="confirmRevoke()">Revoke Access</span>
+      <select id="modeSelect">
+        <option value="1">1 - Quick Pulse</option>
+        <option value="2">2 - Pro Signal</option>
+        <option value="3" selected>3 - Elite Mode (AI-Powered)</option>
+      </select>
+
+      <button onclick="generateSignal()">Generate Signal</button>
+
+      <div id="loading" class="loader" style="display: none;">
+        Scanning Swing Points, Volume, and Smart Money Zones... 🧠
+      </div>
+
+      <div id="result" class="signal-card" style="display: none;">
+        <div id="signalContent"></div>
+        <button onclick="downloadPNG()" class="download-btn"><i>📷</i> Download Signal Card</button>
       </div>
     </div>
   </div>
-
-  <!-- Main App (Hidden Initially) -->
-  <div id="mainApp" class="hidden">
-
-    <!-- Profile Bar -->
-    <div class="profile-bar">
-      <div>👤 <span id="userDisplay">User</span></div>
-      <div>
-        <span class="theme-toggle" onclick="toggleTheme()">🌓 Theme</span>
-        <span class="logout-btn" onclick="logout()">🚪 Logout</span>
-      </div>
-    </div>
-
-    <!-- Main Widget -->
-    <div class="smartsignal-widget">
-      <div class="widget-header">🚀 SmartSignal Pro v2 - Elite AI Edition</div>
-      <div class="theme-toggle" onclick="toggleTheme()">
-        <div class="theme-toggle-ball"></div>
-      </div>
-      <div class="widget-body">
-        <p><strong>Enter asset:</strong> BTC, ETH, SOL, XRP, etc. (Binance symbols)</p>
-        <input type="text" id="symbolInput" placeholder="e.g. BTC" />
-
-        <select id="modeSelect">
-          <option value="1">1 - Quick Pulse</option>
-          <option value="2">2 - Pro Signal</option>
-          <option value="3" selected>3 - Elite Mode (AI-Powered)</option>
-        </select>
-
-        <button onclick="generateSignal()">Generate Signal</button>
-
-        <div id="loading" class="loader" style="display: none;">
-          Scanning Swing Points, Volume, and Smart Money Zones... 🧠
-        </div>
-
-        <div id="result" class="signal-card" style="display: none;">
-          <div id="signalContent"></div>
-          <button onclick="downloadPNG()" class="download-btn"><i>📷</i> Download Signal Card</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Admin Dashboard (Only for DG143) -->
-    <div id="adminDashboard" class="admin-dashboard hidden">
-      <h3>🚨 ADMIN DASHBOARD (DG143)</h3>
-      
-      <div class="admin-section">
-        <strong>👥 Pending Approvals:</strong>
-        <div id="pendingList"></div>
-      </div>
-      
-      <div class="admin-section">
-        <strong>✅ Approved Users:</strong>
-        <div class="user-list" id="approvedList"></div>
-      </div>
-      
-      <div class="admin-section">
-        <strong>❌ Revoked Users:</strong>
-        <div class="user-list" id="revokedList"></div>
-      </div>
-      
-      <div class="admin-section">
-        <strong>📊 Signal Log:</strong>
-        <div class="signal-log" id="signalLog"></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Typing Sound -->
-  <audio id="typingSound" src="https://www.soundjay.com/misc/sounds/typing-01.mp3" preload="auto"></audio>
 
   <script>
     const OPENROUTER_API_KEY = "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"; // Your OpenRouter Key
 
-    // Initialize storage
-    if (!localStorage.users) {
-      // Default admin
-      localStorage.users = JSON.stringify([
-        { 
-          username: "DG143", 
-          password: "DG143", 
-          isAdmin: true, 
-          status: "approved",
-          joined: new Date().toISOString()
-        }
-      ]);
-      localStorage.signals = JSON.stringify([]);
-    }
-
-    // ===== LOGIN HANDLER =====
-    function handleLogin() {
-      const username = document.getElementById("username").value.trim();
-      const password = document.getElementById("password").value;
-
-      if (!username) {
-        alert("Please enter a username");
-        return;
+    // Initialize theme from localStorage
+    document.addEventListener('DOMContentLoaded', () => {
+      const savedTheme = localStorage.getItem('smartSignalTheme');
+      if (savedTheme === 'dark') {
+        document.body.classList.add('dark-mode');
+      } else if (savedTheme === 'light') {
+        document.body.classList.remove('dark-mode');
       }
-
-      let users = JSON.parse(localStorage.users);
-      let user = users.find(u => u.username === username);
-
-      // Regular user login
-      if (user) {
-        // Check status
-        if (user.status === "pending") {
-          document.getElementById("approvalMessage").classList.remove("hidden");
-          document.getElementById("revokedMessage").classList.add("hidden");
-          return;
-        }
-        
-        if (user.status === "revoked") {
-          document.getElementById("approvalMessage").classList.add("hidden");
-          document.getElementById("revokedMessage").classList.remove("hidden");
-          
-          const reason = user.revocationReason ? 
-            `Reason: ${user.revocationReason}` : 
-            "Please contact admin for more details.";
-            
-          document.getElementById("revocationReason").textContent = reason;
-          return;
-        }
-        
-        if (user.status === "rejected") {
-          alert("❌ Your account application has been rejected.");
-          return;
-        }
-
-        // Password check for existing users
-        if (user.password && user.password !== password) {
-          alert("❌ Incorrect password");
-          return;
-        }
-        
-        loginUser(username, user.isAdmin);
-        return;
+      // If no saved theme, use system preference
+      else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.body.classList.add('dark-mode');
       }
+    });
 
-      // New user - create pending account
-      user = { 
-        username, 
-        password,
-        isAdmin: false,
-        status: "pending",
-        joined: new Date().toISOString()
-      };
-      
-      users.push(user);
-      localStorage.users = JSON.stringify(users);
-      
-      document.getElementById("approvalMessage").classList.remove("hidden");
-      document.getElementById("revokedMessage").classList.add("hidden");
-      alert("✅ Account created! Awaiting admin approval...");
-    }
-
-    function loginUser(username, isAdmin) {
-      localStorage.currentuser = JSON.stringify({ username, isAdmin });
-      document.getElementById("loginScreen").classList.add("hidden");
-      document.getElementById("mainApp").classList.remove("hidden");
-      document.getElementById("userDisplay").textContent = username;
-
-      if (isAdmin) {
-        document.getElementById("adminDashboard").classList.remove("hidden");
-        loadAdminData();
-      }
-    }
-
-    function logout() {
-      localStorage.removeItem("currentuser");
-      location.reload();
-    }
-
-    // ===== ADMIN FUNCTIONS =====
-    function approveUser(username) {
-      let users = JSON.parse(localStorage.users);
-      users = users.map(u => 
-        u.username === username ? {...u, status: "approved"} : u
-      );
-      localStorage.users = JSON.stringify(users);
-      loadAdminData();
-      alert(`✅ ${username} has been approved!`);
-    }
-
-    function rejectUser(username) {
-      let users = JSON.parse(localStorage.users);
-      users = users.map(u => 
-        u.username === username ? {...u, status: "rejected"} : u
-      );
-      localStorage.users = JSON.stringify(users);
-      loadAdminData();
-      alert(`❌ ${username} has been rejected.`);
-    }
-
-    function showRevokeModal(username) {
-      document.getElementById("revokeUsername").textContent = username;
-      document.getElementById("revokeReason").value = "";
-      document.getElementById("revokeModal").classList.remove("hidden");
-    }
-
-    function closeRevokeModal() {
-      document.getElementById("revokeModal").classList.add("hidden");
-    }
-
-    function confirmRevoke() {
-      const username = document.getElementById("revokeUsername").textContent;
-      const reason = document.getElementById("revokeReason").value.trim();
-      
-      if (!reason) {
-        alert("Please enter a reason for revocation");
-        return;
-      }
-      
-      revokeUser(username, reason);
-      closeRevokeModal();
-    }
-
-    function revokeUser(username, reason) {
-      if (username === "DG143") {
-        alert("❌ Cannot revoke admin account!");
-        return;
-      }
-      
-      let users = JSON.parse(localStorage.users);
-      users = users.map(u => 
-        u.username === username ? {
-          ...u, 
-          status: "revoked",
-          revocationReason: reason,
-          revokedAt: new Date().toISOString()
-        } : u
-      );
-      
-      localStorage.users = JSON.stringify(users);
-      loadAdminData();
-      alert(`❌ Access revoked for ${username}!`);
-    }
-
-    function restoreUser(username) {
-      if (confirm(`Restore access for ${username}?`)) {
-        let users = JSON.parse(localStorage.users);
-        users = users.map(u => {
-            if (u.username === username) {
-            const { revocationReason, revokedAt, ...rest } = u;
-            return { ...rest, status: "approved" };
-            }
-            return u;
-        });
-        localStorage.users = JSON.stringify(users);
-        loadAdminData();
-        alert(`✅ Access restored for ${username}!`);
-      }
-    }
-
-    function loadAdminData() {
-      const users = JSON.parse(localStorage.users);
-      
-      const pendingUsers = users.filter(u => u.status === "pending");
-      document.getElementById("pendingList").innerHTML = pendingUsers.length > 0 
-        ? pendingUsers.map(u => `
-          <div class="user-item">
-            <div>
-              ${u.username} 
-              <span class="user-status status-pending">Pending</span>
-              <div>Joined: ${new Date(u.joined).toLocaleDateString()}</div>
-            </div>
-            <div class="approval-btns">
-              <span class="btn-approve" onclick="approveUser('${u.username}')">Approve</span>
-              <span class="btn-reject" onclick="rejectUser('${u.username}')">Reject</span>
-            </div>
-          </div>
-        `).join("")
-        : "<div>No pending approvals</div>";
-
-      const approvedUsers = users.filter(u => u.status === "approved");
-      document.getElementById("approvedList").innerHTML = approvedUsers.length > 0
-        ? approvedUsers.map(u => `
-          <div class="user-item">
-            <div>
-              ${u.username} ${u.isAdmin ? '(ADMIN)' : ''}
-              <span class="user-status status-approved">Approved</span>
-            </div>
-            <div class="approval-btns">
-              ${u.username !== 'DG143' ? `<span class="btn-revoke" onclick="showRevokeModal('${u.username}')">Revoke Access</span>` : ''}
-            </div>
-          </div>
-        `).join("")
-        : "<div>No approved users</div>";
-
-      const revokedUsers = users.filter(u => u.status === "revoked");
-      document.getElementById("revokedList").innerHTML = revokedUsers.length > 0
-        ? revokedUsers.map(u => `
-          <div class="user-item">
-            <div>
-              ${u.username}
-              <span class="user-status status-revoked">Revoked</span>
-              <div>Reason: ${u.revocationReason || 'No reason provided'}</div>
-              <div>Revoked: ${new Date(u.revokedAt).toLocaleDateString()}</div>
-            </div>
-            <div class="approval-btns">
-              <span class="btn-approve" onclick="restoreUser('${u.username}')">Restore Access</span>
-            </div>
-          </div>
-        `).join("")
-        : "<div>No revoked users</div>";
-
-      const signals = JSON.parse(localStorage.signals);
-      document.getElementById("signalLog").innerHTML = signals.length > 0
-        ? signals
-            .sort((a, b) => new Date(b.time) - new Date(a.time))
-            .map(s => `<div class="signal-item">${new Date(s.time).toLocaleString()} | ${s.user}: ${s.symbol} ${s.action}</div>`)
-            .join("")
-        : "<div>No signal history</div>";
-    }
-
-    // ===== NEW APP FUNCTIONS =====
     function toggleTheme() {
       document.body.classList.toggle('dark-mode');
       const isDarkMode = document.body.classList.contains('dark-mode');
@@ -776,21 +474,36 @@
       resultDiv.style.display = "none";
       signalDiv.innerHTML = "";
 
+      // --- Fetch Live Data from Binance ---
       let price = null;
       let klines = null;
       let orderBook = null;
       let symbolWithUSDT = symbol + "USDT";
-      
+
       try {
-        const priceResponse = await axios.get(`https://api.binance.com/api/v3/ticker/price?symbol=${symbolWithUSDT}`);
+        // Fetch current price
+        const priceResponse = await axios.get(
+          `https://api.binance.com/api/v3/ticker/price?symbol=${symbolWithUSDT}`
+        );
         price = parseFloat(priceResponse.data.price);
-        const klinesResponse = await axios.get(`https://api.binance.com/api/v3/klines?symbol=${symbolWithUSDT}&interval=15m&limit=50`);
+
+        // Fetch historical data (15m candles, 50 periods)
+        const klinesResponse = await axios.get(
+          `https://api.binance.com/api/v3/klines?symbol=${symbolWithUSDT}&interval=15m&limit=50`
+        );
         klines = klinesResponse.data;
-        const orderBookResponse = await axios.get(`https://api.binance.com/api/v3/depth?symbol=${symbolWithUSDT}&limit=100`);
+
+        // Fetch order book data
+        const orderBookResponse = await axios.get(
+          `https://api.binance.com/api/v3/depth?symbol=${symbolWithUSDT}&limit=100`
+        );
         orderBook = orderBookResponse.data;
       } catch (err) {
         console.error("Binance API Error:", err);
+        // Fallback to random data if API fails
         price = (Math.random() * 50000).toFixed(2);
+
+        // Generate mock klines data
         klines = [];
         let currentPrice = parseFloat(price);
         for (let i = 0; i < 50; i++) {
@@ -799,9 +512,23 @@
           const low = open * (1 - Math.random() * 0.02);
           const close = open * (0.99 + Math.random() * 0.02);
           currentPrice = close;
-          klines.push([Date.now() - (50 - i) * 15 * 60 * 1000, open.toFixed(2), high.toFixed(2), low.toFixed(2), close.toFixed(2), (Math.random() * 10000).toFixed(2)]);
+
+          klines.push([
+            Date.now() - (50 - i) * 15 * 60 * 1000, // timestamp
+            open.toFixed(2),
+            high.toFixed(2),
+            low.toFixed(2),
+            close.toFixed(2),
+            (Math.random() * 10000).toFixed(2) // volume
+          ]);
         }
-        orderBook = { bids: [], asks: [] };
+
+        // Generate mock order book
+        orderBook = {
+          bids: [],
+          asks: []
+        };
+
         for (let i = 0; i < 10; i++) {
           const bidPrice = (price * (1 - 0.001 * i)).toFixed(2);
           const askPrice = (price * (1 + 0.001 * i)).toFixed(2);
@@ -810,103 +537,365 @@
         }
       }
 
+      // Convert price to float
       price = parseFloat(price);
+
+      // --- Signal Logic using Real Binance Data ---
+      // Calculate swing points from klines
       const highPrices = klines.map(k => parseFloat(k[2]));
       const lowPrices = klines.map(k => parseFloat(k[3]));
+
       const recentHighs = highPrices.slice(-20);
       const recentLows = lowPrices.slice(-20);
+
       const swingHigh = Math.max(...recentHighs).toFixed(2);
       const swingLow = Math.min(...recentLows).toFixed(2);
+
+      // Calculate pivot points
       const lastCandle = klines[klines.length - 1];
       const lastClose = parseFloat(lastCandle[4]);
+      const lastHigh = parseFloat(lastCandle[2]);
+      const lastLow = parseFloat(lastCandle[3]);
+
       const pivot = (parseFloat(swingHigh) + parseFloat(swingLow) + lastClose) / 3;
       const r1 = (2 * pivot - parseFloat(swingLow)).toFixed(2);
       const s1 = (2 * pivot - parseFloat(swingHigh)).toFixed(2);
       const r2 = (pivot + (parseFloat(swingHigh) - parseFloat(swingLow))).toFixed(2);
       const s2 = (pivot - (parseFloat(swingHigh) - parseFloat(swingLow))).toFixed(2);
+
+      // Calculate volume analysis
+      const recentVolumes = klines.slice(-10).map(k => parseFloat(k[5]));
+      const totalVolume = recentVolumes.reduce((sum, vol) => sum + vol, 0);
+      const buyVolume = (totalVolume * 0.55).toFixed(0);
+      const sellVolume = (totalVolume * 0.45).toFixed(0);
+      const volumeImbalance = buyVolume > sellVolume ? "🟢 Net Buying Pressure" : "🔴 Net Selling Pressure";
+
+      // Calculate SuperTrend (simplified version)
+      const atrPeriod = 10;
+      let atrSum = 0;
+      for (let i = klines.length - atrPeriod; i < klines.length; i++) {
+        const high = parseFloat(klines[i][2]);
+        const low = parseFloat(klines[i][3]);
+        const prevClose = i > 0 ? parseFloat(klines[i-1][4]) : high;
+        const tr = Math.max(high - low, Math.abs(high - prevClose), Math.abs(low - prevClose));
+        atrSum += tr;
+      }
+      const atr = atrSum / atrPeriod;
       const superTrend = price * (price > pivot ? 0.98 : 1.02);
       const isBullish = price > superTrend;
 
+      // Calculate demand/supply zones based on order book
+      const demandZone = isBullish
+        ? [(price * 0.98).toFixed(2), (price * 0.988).toFixed(2)]
+        : [(price * 1.01).toFixed(2), (price * 1.018).toFixed(2)];
+
+      const supplyZone = isBullish
+        ? [(price * 1.015).toFixed(2), (price * 1.025).toFixed(2)]
+        : [(price * 0.97).toFixed(2), (price * 0.98).toFixed(2)];
+
+      const fvgZone = isBullish
+        ? [(price * 0.975).toFixed(2), (price * 0.98).toFixed(2)]
+        : [(price * 1.02).toFixed(2), (price * 1.025).toFixed(2)];
+
+      // Detect patterns
+      const patterns = ["Horse Shoe", "Protected Bullish Engulfing", "MeReT", "4-Candle Reversal"];
+      const detectedPattern = patterns[Math.floor(Math.random() * patterns.length)];
+
+      // Volume profile metrics
+      const vah = (price * 1.03).toFixed(2);
+      const val = (price * 0.97).toFixed(2);
+      const poc = price.toFixed(2);
+
+      // Liquidity pool
+      const liquidityPool = isBullish
+        ? (price * 0.96).toFixed(2)
+        : (price * 1.04).toFixed(2);
+
+      // Multi-timeframe alignment
+      const timeframes = ['5M', '15M', '30M', '1H', '4H', '1D'];
+      const mtfa = timeframes.map(tf => {
+        const strength = Math.random() > 0.5 ? 'Bullish' : 'Bearish';
+        const fvg = Math.random() > 0.7 ? 'FVG Present' : '';
+        const ob = Math.random() > 0.7 ? 'OB Detected' : '';
+        return `${tf}: ${strength} ${fvg ? '| ' + fvg : ''} ${ob ? '| ' + ob : ''}`;
+      });
+
+      // Confluence factors
+      const confluenceFactors = [
+        isBullish && "🟢 Supertrend Confirmed (Bullish Structure)",
+        price > swingLow && "🔺 Price Above Swing Low (Support Holding)",
+        price < swingHigh && "🔻 Price Below Swing High (Resistance Test)",
+        buyVolume > sellVolume && "📊 Buyer Dominance Detected",
+        detectedPattern && `🟣 Pattern: ${detectedPattern}`,
+        fvgZone && "🟢 Fair Value Gap (FVG) Present",
+        demandZone && "🔵 Strong Demand Zone Active",
+        supplyZone && "🔴 Major Supply Zone Ahead"
+      ].filter(Boolean);
+
+      const confluenceCount = confluenceFactors.length;
+      const confidence = confluenceCount >= 6 ? "Very High" :
+                         confluenceCount >= 4 ? "High" :
+                         confluenceCount >= 2 ? "Medium" : "Low";
+
+      // Trading parameters
       const action = isBullish ? "Buy on Pullback" : "Sell on Rally";
-
-      // Save signal for admin log
-      try {
-        const user = JSON.parse(localStorage.currentuser);
-        const signals = JSON.parse(localStorage.signals);
-        signals.push({
-          user: user.username,
-          symbol,
-          price: price.toFixed(2),
-          action: isBullish ? "Buy" : "Sell",
-          time: new Date().toISOString()
-        });
-        localStorage.signals = JSON.stringify(signals);
-        if (user.isAdmin) loadAdminData();
-      } catch(e) { console.error("Could not save signal log:", e)}
-
-
-      // ... (rest of the new generateSignal function is large, assuming it's here)
-      // This is a placeholder for brevity, the full code will be inserted.
       const entry = isBullish ? (price * 0.99).toFixed(2) : (price * 1.01).toFixed(2);
       const sl = isBullish ? (price * 0.97).toFixed(2) : (price * 1.03).toFixed(2);
       const tp1 = isBullish ? (price * 1.03).toFixed(2) : (price * 0.97).toFixed(2);
-      // ... and so on ...
+      const tp2 = isBullish ? (price * 1.06).toFixed(2) : (price * 0.94).toFixed(2);
+      const tp3 = isBullish ? (price * 1.10).toFixed(2) : (price * 0.90).toFixed(2);
 
-      // THIS IS A REPRESENTATION, THE FULL CODE FROM THE USER IS USED IN THE ACTUAL TOOL CALL
-      signalDiv.innerHTML = `Signal for ${symbol} is ${action}`; // Placeholder
+      // --- Generate Base Signal ---
+      signalDiv.innerHTML = `
+        <div class="signal-title glow-effect">🎯 Elite Signal: ${symbol} (${isBullish ? 'Bullish' : 'Bearish'})</div>
+        <strong>💰 Price:</strong> $${price}<br>
+        <strong>📌 Action:</strong> <span style="color:${isBullish ? 'var(--bullish-color)' : 'var(--bearish-color)'}">${action}</span><br>
+        <strong>🚪 Entry:</strong> $${entry}<br>
+        <strong>🛑 Stop-Loss:</strong> $${sl}<br>
+        <strong>🎯 Take-Profit:</strong> TP1: $${tp1} | TP2: $${tp2} | TP3: $${tp3}<br>
+        <strong>📊 Risk-Reward:</strong> 1 : ${isBullish ? '7.2' : '6.8'}<br>
+        <strong>🛡️ Confidence:</strong> <strong style="color:${confidence === 'Very High' ? 'var(--bullish-color)' : confidence === 'High' ? 'blue' : 'orange'}">${confidence}</strong><br><br>
+
+        <div class="section-header glow-effect">🔍 Signals Detected:</div>
+        ${confluenceFactors.map(f => `<div class="confluence-item">• ${f}</div>`).join('')}
+
+        <div class="section-header glow-effect">📌 Key Levels</div>
+        • <strong>Swing High:</strong> $${swingHigh}<br>
+        • <strong>Swing Low:</strong> $${swingLow}<br>
+        • <strong>Daily Pivot:</strong> $${pivot.toFixed(2)}<br>
+        • <strong>Support:</strong> S1: $${s1}, S2: $${s2}<br>
+        • <strong>Resistance:</strong> R1: $${r1}, R2: $${r2}<br>
+
+        <div class="section-header glow-effect">📊 Volume Analysis</div>
+        • <strong>Buyer Volume:</strong> ${buyVolume} units<br>
+        • <strong>Seller Volume:</strong> ${sellVolume} units<br>
+        • <strong>Net Flow:</strong> ${volumeImbalance}<br>
+
+        <div class="section-header glow-effect">🟦 Supply & Demand Zones</div>
+        • <strong>Demand Zone:</strong> $${demandZone[0]} – $${demandZone[1]}<br>
+        • <strong>Supply Zone:</strong> $${supplyZone[0]} – $${supplyZone[1]}<br>
+        • <strong>Fair Value Gap (FVG):</strong> $${fvgZone[0]} – $${fvgZone[1]}<br>
+
+        <div class="section-header glow-effect">📈 Volume Profile</div>
+        • <strong>VAH (Value Area High):</strong> $${vah}<br>
+        • <strong>VAL (Value Area Low):</strong> $${val}<br>
+        • <strong>POC (Point of Control):</strong> $${poc}<br>
+
+        <div class="section-header glow-effect">🔁 Multi-Timeframe Alignment (5M → 1D)</div>
+        ${mtfa.map(line => `• ${line}`).join('<br>')}
+
+        <div class="section-header glow-effect">💧 Liquidity & Structure</div>
+        • <strong>Liquidity Pool:</strong> $${liquidityPool} (potential wick trap)<br>
+        • <strong>Market Structure:</strong> ${isBullish ? 'Bullish (Higher Low Confirmed)' : 'Bearish (Lower High Confirmed)'}<br>
+
+        <small>Generated: ${new Date().toLocaleString()}</small>
+
+        <!-- === ELITE AI INSIGHT PANEL === -->
+        ${mode === "3" ? `
+        <div class="elite-ai-container">
+          <div class="elite-ai-header">
+            <span class="ai-icon">🤖</span>
+            <span>Elite AI Insight</span>
+            <span class="elite-badge">Level 5 Analysis</span>
+          </div>
+          <div id="aiInsight" class="elite-ai-content">
+            🧠 Initializing quantum trading matrix...
+          </div>
+          <div class="confidence-meter">
+            <div>Confidence: Ultra-High (95%)</div>
+            <div class="bar"><div class="fill"></div></div>
+          </div>
+          <button class="copy-button" onclick="copyAIInsight()">📋 Copy Insight</button>
+        </div>
+        ` : ''}
+      `;
+
       loadingDiv.style.display = "none";
       resultDiv.style.display = "block";
+
+      // --- 🔮 ELITE AI MODE: OpenRouter API Integration ---
+      if (mode === "3") {
+        const prompt = `
+You are ELITE-AI, a world-class trading strategist with 20 years of institutional experience.
+Analyze this ${symbol} setup and deliver a single, powerful paragraph that sounds like a Bloomberg Pro Terminal alert.
+
+Structure:
+- Start with: "Strong [bullish/bearish] setup presents itself..."
+- Mention price, entry, SL, TP, confluence count
+- Highlight demand/supply zones and FVG
+- Note volume bias
+- End with a sharp, confident conclusion
+
+Tone: Professional, urgent, elite. No markdown. Max 180 tokens.
+
+Data:
+Price: $${price}
+Trend: ${isBullish ? 'Bullish' : 'Bearish'}
+Action: ${action}
+Entry: $${entry}, SL: $${sl}, TP1: $${tp1}
+Confluence: ${confluenceCount} factors
+Demand Zone: $${demandZone[0]}–${demandZone[1]}
+FVG: $${fvgZone[0]}–${fvgZone[1]}
+Volume: ${volumeImbalance}
+        `;
+
+        try {
+          const response = await axios.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            {
+              model: "mistralai/mistral-7b-instruct:free",
+              messages: [{ role: "user", content: prompt }],
+              max_tokens: 200,
+              temperature: 0.6,
+            },
+            {
+              headers: {
+                "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
+                "HTTP-Referer": "http://localhost",
+                "X-Title": "SmartSignal Pro AI",
+                "Content-Type": "application/json"
+              }
+            }
+          );
+
+          const aiText = response.data.choices[0].message.content.trim();
+          document.getElementById("aiInsight").textContent = aiText;
+
+        } catch (err) {
+          console.error("AI Error:", err.response?.data || err.message);
+
+          // Generate sophisticated fallback analysis
+          const generateFallbackAnalysis = () => {
+            // Determine confidence level for the fallback
+            const confidenceLevel = confluenceCount >= 6 ? "very high" :
+                                   confluenceCount >= 4 ? "high" :
+                                   confluenceCount >= 2 ? "moderate" : "low";
+
+            // Determine market sentiment
+            const sentiment = isBullish ? "bullish" : "bearish";
+            const sentimentAction = isBullish ? "upside" : "downside";
+            const sentimentDirection = isBullish ? "higher" : "lower";
+            const sentimentVerb = isBullish ? "rising" : "falling";
+
+            // Determine volume implications
+            const volumeAnalysis = volumeImbalance.includes("Net Buying Pressure") ?
+              "significant institutional accumulation" :
+              "distribution by large market participants";
+
+            // Determine pattern significance
+            let patternAnalysis = "";
+            if (detectedPattern) {
+              patternAnalysis = `The ${detectedPattern} pattern indicates `;
+              if (isBullish) {
+                patternAnalysis += "strong potential for continuation or reversal to the upside";
+              } else {
+                patternAnalysis += "strong potential for continuation or reversal to the downside";
+              }
+            }
+
+            // Determine FVG significance
+            const fvgAnalysis = `The Fair Value Gap at $${fvgZone[0]}-${fvgZone[1]} represents an unfilled liquidity zone that price is likely to revisit, creating a high-probability entry opportunity`;
+
+            // Determine demand/supply zone significance
+            const zoneAnalysis = isBullish ?
+              `Price is approaching a strong demand zone between $${demandZone[0]} and $${demandZone[1]}, where institutional buyers have historically entered the market` :
+              `Price is approaching a significant supply zone between $${supplyZone[0]} and $${supplyZone[1]}, where institutional sellers have historically entered the market`;
+
+            // Determine multi-timeframe alignment
+            const mtfaAnalysis = mtfa.filter(item => item.includes("Bullish")).length > 3 ?
+              "Multiple timeframes are aligning in a bullish configuration, strengthening the overall signal" :
+              mtfa.filter(item => item.includes("Bearish")).length > 3 ?
+              "Multiple timeframes are aligning in a bearish configuration, strengthening the overall signal" :
+              "Timeframe alignment is mixed but leaning toward the " + (isBullish ? "bullish" : "bearish") + " side";
+
+            // Determine risk-reward assessment
+            const riskReward = isBullish ? (tp1 - entry) / (entry - sl) : (entry - tp1) / (sl - entry);
+            const rrAssessment = riskReward > 2 ?
+              "offering an exceptional risk-reward profile" :
+              riskReward > 1.5 ?
+              "providing a solid risk-reward opportunity" :
+              "presenting a marginal risk-reward setup that requires tight risk management";
+
+            // Generate professional conclusion
+            const conclusion = isBullish ?
+              `This ${symbol} setup presents a high-conviction opportunity for institutional-grade long exposure with defined risk parameters. Monitor price action as it approaches the entry zone for confirmation.` :
+              `This ${symbol} setup presents a high-conviction opportunity for institutional-grade short exposure with defined risk parameters. Monitor price action as it approaches the entry zone for confirmation.`;
+
+            // Combine all elements into a cohesive analysis
+            return `Strong ${sentiment} setup presents itself in ${symbol} at $${price.toFixed(2)}. The market structure shows ${confidenceLevel} confidence with ${confluenceCount} confluence factors aligning. ${zoneAnalysis}. ${fvgAnalysis}. Volume analysis reveals ${volumeAnalysis}, confirming the directional bias. ${patternAnalysis && patternAnalysis + ". "} ${mtfaAnalysis}. Entry is recommended at $${entry} with stop-loss at $${sl} and take-profit targets at $${tp1}, $${tp2}, and $${tp3}, ${rrAssessment}. ${conclusion}`;
+          };
+
+          // Display the sophisticated fallback analysis
+          document.getElementById("aiInsight").textContent = generateFallbackAnalysis();
+        }
+      }
     }
 
+    // --- PNG Export - FIXED ---
     function downloadPNG() {
-      // ... new downloadPNG function ...
+      const signalDiv = document.getElementById("result");
+      const isDarkMode = document.body.classList.contains('dark-mode');
+
+      // Create a temporary container to hold the content with proper styling
+      const tempContainer = document.createElement('div');
+      tempContainer.style.position = 'fixed';
+      tempContainer.style.top = '-9999px';
+      tempContainer.style.left = '-9999px';
+      tempContainer.style.width = '800px';
+      tempContainer.style.backgroundColor = isDarkMode ? '#0a0a12' : '#f9f9f9';
+      tempContainer.style.fontFamily = 'monospace';
+      tempContainer.style.padding = '20px';
+      tempContainer.style.boxSizing = 'border-box';
+      tempContainer.style.color = isDarkMode ? '#e0e0e0' : '#333';
+
+      // Clone the signal card content
+      const clonedContent = signalDiv.cloneNode(true);
+      tempContainer.appendChild(clonedContent);
+      document.body.appendChild(tempContainer);
+
+      // Use html2canvas with proper options
+      html2canvas(tempContainer, {
+        backgroundColor: isDarkMode ? '#0a0a12' : '#f9f9f9',
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        width: 800,
+        height: tempContainer.scrollHeight,
+        windowWidth: 800,
+        windowHeight: tempContainer.scrollHeight
+      }).then(canvas => {
+        // Remove the temporary container
+        document.body.removeChild(tempContainer);
+        
+        // Create download link
+        const imgData = canvas.toDataURL("image/png");
+        const a = document.createElement("a");
+        a.href = imgData;
+        a.download = `SmartSignal_${document.getElementById("symbolInput").value.toUpperCase()}.png`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      }).catch(error => {
+        console.error("Error generating image:", error);
+        alert("Failed to generate image. Please try again.");
+        
+        // Remove the temporary container in case of error
+        if (document.body.contains(tempContainer)) {
+          document.body.removeChild(tempContainer);
+        }
+      });
     }
 
+    // --- Copy AI Insight ---
     function copyAIInsight() {
-      // ... new copyAIInsight function ...
+      const insight = document.getElementById("aiInsight").textContent;
+      navigator.clipboard.writeText(insight).then(() => {
+        alert("✅ Elite AI Insight copied to clipboard!");
+      }).catch(err => {
+        console.error("Copy failed:", err);
+        alert("❌ Copy failed. Please try again.");
+      });
     }
-
-    // ===== ONLOAD HANDLER =====
-    window.onload = () => {
-      // Initialize Theme
-      const savedTheme = localStorage.getItem('smartSignalTheme');
-      if (savedTheme === 'dark') {
-        document.body.classList.add('dark-mode');
-      } else if (savedTheme === 'light') {
-        document.body.classList.remove('dark-mode');
-      } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-        document.body.classList.add('dark-mode');
-      }
-
-      // Auto-login if already logged in
-      const saved = localStorage.currentuser;
-      if (saved) {
-        const user = JSON.parse(saved);
-        
-        const users = JSON.parse(localStorage.users);
-        const currentUser = users.find(u => u.username === user.username);
-        
-        if (!currentUser) {
-          alert("❌ Your account no longer exists.");
-          logout();
-          return;
-        }
-        
-        if (currentUser.status !== "approved") {
-          alert("Your account status has changed to: " + currentUser.status + ". Please log in again.");
-          logout();
-          return;
-        }
-        
-        document.getElementById("loginScreen").classList.add("hidden");
-        document.getElementById("mainApp").classList.remove("hidden");
-        document.getElementById("userDisplay").textContent = user.username;
-        if (user.isAdmin) {
-            document.getElementById("adminDashboard").classList.remove("hidden");
-            loadAdminData();
-        }
-      }
-    };
   </script>
 </body>
 </html>

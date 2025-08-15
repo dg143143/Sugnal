@@ -488,12 +488,6 @@
       let users = JSON.parse(localStorage.users);
       let user = users.find(u => u.username === username);
 
-      // Admin Login
-      if (username === "DG143" && password === "DG143") {
-        loginUser("DG143", true);
-        return;
-      }
-
       // Regular user login
       if (user) {
         // Check status
